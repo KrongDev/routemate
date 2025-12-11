@@ -11,6 +11,10 @@ public class RandomLoadBalancer implements LoadBalancer {
             return null;
         }
 
+        if (keys.size() == 1) {
+            return keys.get(0);
+        }
+
         int index = ThreadLocalRandom.current().nextInt(keys.size());
         return keys.get(index);
     }
