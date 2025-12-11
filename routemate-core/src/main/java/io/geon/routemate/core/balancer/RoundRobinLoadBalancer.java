@@ -12,8 +12,18 @@ public class RoundRobinLoadBalancer implements LoadBalancer {
         if (keys == null || keys.isEmpty()) {
             return null;
         }
+        int size = keys.size();
+        int idx = counter.getAndIncrement();
 
-        int index = counter.getAndIncrement() % keys.size();
-        return keys.get(Math.abs(index));
+        if (idx > 1_000_000_000) {
+            counter.set(0);
+            idx = 0;
+        }
+
+        if (idx < 0) {
+            idx = Math.abs(idx);
+        }
+
+        return keys.get(idx % size);
     }
 }
