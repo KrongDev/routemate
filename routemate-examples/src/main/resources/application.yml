@@ -1,0 +1,30 @@
+spring:
+  application:
+     name: routemate-example
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# Routemate Configuration
+routemate:
+  enabled: true
+  default-datasource: master
+  datasources:
+    master:
+      url: jdbc:h2:mem:masterdb;DB_CLOSE_DELAY=-1
+      username: sa
+      password: 
+      driver-class-name: org.h2.Driver
+    read-1:
+      url: jdbc:h2:mem:read1db;DB_CLOSE_DELAY=-1
+      username: sa
+      password: 
+      driver-class-name: org.h2.Driver
+  routing:
+    read-datasources:
+      - read-1
+    write-datasource: master

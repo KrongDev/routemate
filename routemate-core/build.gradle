@@ -1,0 +1,13 @@
+dependencies {
+    api 'org.springframework:spring-jdbc'
+    api 'com.zaxxer:HikariCP'
+    api 'org.slf4j:slf4j-api'
+    implementation 'org.springframework:spring-context'
+    implementation 'org.springframework:spring-tx'
+    implementation 'org.aspectj:aspectjweaver'
+    implementation 'jakarta.annotation:jakarta.annotation-api'
+    testImplementation 'org.springframework:spring-jdbc'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

@@ -1,0 +1,5 @@
+rootProject.name = 'routemate'
+
+include 'routemate-core'
+include 'routemate-spring-boot-starter'
+include 'routemate-examples'

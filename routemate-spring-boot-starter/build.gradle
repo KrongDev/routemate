@@ -1,0 +1,12 @@
+dependencies {
+    api project(':routemate-core')
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+    
+    // Compile-time dependencies provided by the consumer
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    
+    // Optional annotation processor for generating metadata
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+}
