@@ -28,14 +28,15 @@ public class WeightedRoundRobinLoadBalancer implements LoadBalancer {
         List<String> builtList = new ArrayList<>();
         if (weights != null) {
             weights.forEach((key, weight) -> {
-                if (weight < 1)
-                    weight = 1; // Minimum weight 1
+                if (weight < 1) weight = 1;
                 for (int i = 0; i < weight; i++) {
                     builtList.add(key);
                 }
             });
         }
+
         this.distributionListRef.set(Collections.unmodifiableList(builtList));
+        this.index.set(0); // reset on weight update
     }
 
     @Override
@@ -44,17 +45,22 @@ public class WeightedRoundRobinLoadBalancer implements LoadBalancer {
             return null;
         }
 
+        // overflow protection
+        int idx = index.getAndIncrement();
+        if (idx > 1_000_000_000) {
+            index.set(0);
+            idx = 0;
+        }
+        idx = Math.abs(idx);
+
         List<String> distributionList = distributionListRef.get();
         if (distributionList == null || distributionList.isEmpty()) {
-            // Fallback to simple Random/RR if no distribution list available
-            return healthyKeys.get(Math.abs(index.getAndIncrement() % healthyKeys.size()));
+            return healthyKeys.get(idx % healthyKeys.size());
         }
 
         int size = distributionList.size();
-        int startIndex = Math.abs(index.getAndIncrement() % size);
+        int startIndex = idx % size;
 
-        // Loop at most 'size' times to find a healthy candidate in the distribution
-        // list
         for (int i = 0; i < size; i++) {
             String candidate = distributionList.get((startIndex + i) % size);
             if (healthyKeys.contains(candidate)) {
@@ -62,7 +68,6 @@ public class WeightedRoundRobinLoadBalancer implements LoadBalancer {
             }
         }
 
-        // Fallback: if none of the keys in distribution list are healthy
-        return healthyKeys.get(Math.abs(index.getAndIncrement() % healthyKeys.size()));
+        return healthyKeys.get(idx % healthyKeys.size());
     }
 }
