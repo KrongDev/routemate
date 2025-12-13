@@ -7,11 +7,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import com.zaxxer.hikari.HikariDataSource;
 
-import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import io.geon.routemate.core.balancer.LoadBalancer;
 import io.geon.routemate.core.balancer.RoundRobinLoadBalancer;
@@ -53,7 +54,9 @@ public class RoutemateAutoConfiguration {
     }
 
     @Bean
-    public DataSource dataSource(DataSourceConfigurationProperties properties, LoadBalancer loadBalancer) {
+    @Primary
+    public DataSourceRouter routemateDataSource(DataSourceConfigurationProperties properties,
+            LoadBalancer loadBalancer) {
         DataSourceRouter router = new DataSourceRouter();
         router.setLoadBalancer(loadBalancer);
         Map<Object, Object> targetDataSources = new HashMap<>();
@@ -91,11 +94,12 @@ public class RoutemateAutoConfiguration {
         // Set default target
         if (properties.getDefaultDatasource() != null
                 && targetDataSources.containsKey(properties.getDefaultDatasource())) {
-            router.setDefaultTargetDataSource(targetDataSources.get(properties.getDefaultDatasource()));
+            router.setDefaultTargetDataSource(
+                    Objects.requireNonNull(targetDataSources.get(properties.getDefaultDatasource())));
         } else if (!targetDataSources.isEmpty()) {
             // Fallback to first available if no default specified or default key not found
             Object firstKey = targetDataSources.keySet().iterator().next();
-            router.setDefaultTargetDataSource(targetDataSources.get(firstKey));
+            router.setDefaultTargetDataSource(Objects.requireNonNull(targetDataSources.get(firstKey)));
         }
 
         return router;

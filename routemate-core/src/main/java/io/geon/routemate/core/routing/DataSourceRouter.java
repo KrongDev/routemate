@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +29,7 @@ public class DataSourceRouter extends AbstractRoutingDataSource {
 
     // Safe to return COWAL
     @Getter
-    private final List<String> readDataSourceKeys = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final List<String> readDataSourceKeys = new CopyOnWriteArrayList<>();
     private final Set<String> unhealthyKeys = ConcurrentHashMap.newKeySet();
     @Setter
     private LoadBalancer loadBalancer = new RoundRobinLoadBalancer(); // Default

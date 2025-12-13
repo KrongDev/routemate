@@ -1,6 +1,7 @@
 package io.geon.routemate.core.balancer;
 
 import java.util.List;
+import java.util.Map;
 
 public interface LoadBalancer {
     /**
@@ -16,7 +17,7 @@ public interface LoadBalancer {
      * 
      * @param weights map of datasource keys to their weights
      */
-    default void updateWeights(java.util.Map<String, Integer> weights) {
+    default void updateWeights(Map<String, Integer> weights) {
         // Default no-op
     }
 }
