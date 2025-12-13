@@ -1,47 +1,66 @@
 package io.geon.routemate.core.routing;
 
+import io.geon.routemate.core.balancer.RoundRobinLoadBalancer;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import java.util.List;
+import org.mockito.Mockito;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import javax.sql.DataSource;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class DataSourceRouterTest {
+
+    private DataSourceRouter router;
+    private DataSource writeDataSource;
+    private DataSource readDataSource1;
+    private DataSource readDataSource2;
 
     @AfterEach
     void tearDown() {
         RoutingContext.clear();
     }
 
-    @Test
-    void shouldReturnNullWhenContextIsEmpty() {
-        DataSourceRouter router = new DataSourceRouter();
-        assertThat(router.determineCurrentLookupKey()).isNull();
+    @BeforeEach
+    void setUp() {
+        writeDataSource = mock(DataSource.class);
+        readDataSource1 = mock(DataSource.class);
+        readDataSource2 = mock(DataSource.class);
+
+        Map<String, DataSource> readDataSources = new HashMap<>();
+        readDataSources.put("read1", readDataSource1);
+        readDataSources.put("read2", readDataSource2);
+
+        // Constructor Injection
+        router = new DataSourceRouter(writeDataSource, new RoundRobinLoadBalancer());
+        router.setReadDataSources(readDataSources);
     }
 
     @Test
-    void shouldReturnContextValue() {
-        DataSourceRouter router = new DataSourceRouter();
-        router.setReadDataSourceKeys(List.of("READ-1", "READ-2"));
-
-        RoutingContext.set("MASTER");
-        assertThat(router.determineCurrentLookupKey()).isEqualTo("MASTER");
-
-        RoutingContext.set(RoutingContext.READ);
-        assertThat(router.determineCurrentLookupKey()).isEqualTo("READ-1");
-        assertThat(router.determineCurrentLookupKey()).isEqualTo("READ-2"); // Round-robin
-        assertThat(router.determineCurrentLookupKey()).isEqualTo("READ-1");
-
+    void testWriteRouting() {
         RoutingContext.clear();
-        assertThat(router.determineCurrentLookupKey()).isEqualTo("MASTER");
+        Object key = router.determineCurrentLookupKey();
+        assertEquals("WRITE", key);
     }
 
     @Test
-    void shouldFallbackWhenNoReadReplicas() {
-        DataSourceRouter router = new DataSourceRouter();
-        // No read keys set
-
+    void testReadRouting() {
         RoutingContext.set(RoutingContext.READ);
-        assertThat(router.determineCurrentLookupKey()).isNull(); // Fallback to default
+        Object key = router.determineCurrentLookupKey();
+        assertTrue(key.equals("read1") || key.equals("read2"));
+    }
+
+    @Test
+    void testFallbackToWrite() {
+        // No Read Data Sources
+        DataSourceRouter emptyRouter = new DataSourceRouter(writeDataSource, new RoundRobinLoadBalancer());
+        RoutingContext.set(RoutingContext.READ);
+        Object key = emptyRouter.determineCurrentLookupKey();
+        assertEquals("WRITE", key);
     }
 }

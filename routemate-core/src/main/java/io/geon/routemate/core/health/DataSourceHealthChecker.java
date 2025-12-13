@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import jakarta.annotation.PreDestroy;
+import org.springframework.context.SmartLifecycle;
+
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement; // Import needed
@@ -14,7 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class DataSourceHealthChecker {
+public class DataSourceHealthChecker implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceHealthChecker.class);
 
@@ -23,6 +25,8 @@ public class DataSourceHealthChecker {
     private final java.time.Duration interval;
     private final java.time.Duration timeout;
     private final String validationQuery;
+
+    private volatile boolean running = false;
 
     public DataSourceHealthChecker(DataSourceRouter router,
             java.time.Duration interval,
@@ -40,15 +44,44 @@ public class DataSourceHealthChecker {
         });
     }
 
+    @Override
     public void start() {
+        if (isRunning()) {
+            return;
+        }
         log.info("Starting DataSourceHealthChecker with interval={}ms, query='{}'", interval.toMillis(),
                 validationQuery);
         this.executor.scheduleAtFixedRate(this::checkHealth, interval.toMillis(), interval.toMillis(),
                 TimeUnit.MILLISECONDS);
+        this.running = true;
     }
 
+    @Override
+    public void stop() {
+        if (!isRunning()) {
+            return;
+        }
+        log.info("Stopping DataSourceHealthChecker...");
+        this.running = false;
+        // Executor shutdown managed in @PreDestroy or separate hook if needed.
+        // But SmartLifecycle stop is logical stop.
+    }
+
+    @Override
+    public boolean isRunning() {
+        return this.running;
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        log.info("Shutting down DataSourceHealthChecker executor...");
+        executor.shutdownNow();
+    }
+
+    // ... checkHealth and isHealthy methods ...
+
     private void checkHealth() {
-        Map<Object, DataSource> dataSources = router.getDataSourceMap(); // always up-to-date
+        Map<String, DataSource> dataSources = router.getReadDataSources();
 
         for (String key : router.getReadDataSourceKeys()) {
             DataSource ds = dataSources.get(key);
@@ -83,11 +116,5 @@ public class DataSourceHealthChecker {
             log.warn("Health check failed for [{}]: {}", key, e.getMessage());
             return false;
         }
-    }
-
-    @PreDestroy
-    public void shutdown() {
-        log.info("Shutting down DataSourceHealthChecker...");
-        executor.shutdownNow();
     }
 }

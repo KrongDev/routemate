@@ -12,9 +12,10 @@ import java.util.Map;
 @Getter
 @ConfigurationProperties(prefix = "routemate")
 public class DataSourceConfigurationProperties {
+
     private boolean enabled = true;
-    private String defaultDatasource;
-    private Map<String, DataSourceProperties> datasources = new HashMap<>();
+    // default는 Writer 전용(Master)/ Read(Slave)만 관리한다.
+    private Map<String, DataSourceProperties> reads = new HashMap<>();
     private RoutingProperties routing = new RoutingProperties();
 
     private HealthCheckProperties healthCheck = new HealthCheckProperties();

@@ -1,6 +1,11 @@
 spring:
   application:
-     name: routemate-example
+    name: routemate-example
+  datasource:
+    url: jdbc:mysql://localhost:3307/routemate_db
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
@@ -8,23 +13,25 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
 
-# Routemate Configuration
 routemate:
   enabled: true
-  default-datasource: master
-  datasources:
-    master:
-      url: jdbc:h2:mem:masterdb;DB_CLOSE_DELAY=-1
-      username: sa
-      password: 
-      driver-class-name: org.h2.Driver
-    read-1:
-      url: jdbc:h2:mem:read1db;DB_CLOSE_DELAY=-1
-      username: sa
-      password: 
-      driver-class-name: org.h2.Driver
+  
+  # Managed Read DataSources
+  reads:
+    slave-1:
+      url: jdbc:mysql://localhost:3308/routemate_db
+      username: root
+      password: root
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      weight: 1
+    slave-2:
+      url: jdbc:mysql://localhost:3309/routemate_db
+      username: root
+      password: root
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      weight: 1
+  
   routing:
-    read-datasources:
-      - read-1
-    write-datasource: master
+    load-balance-strategy: weighted-round-robin

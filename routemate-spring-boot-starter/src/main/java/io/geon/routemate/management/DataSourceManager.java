@@ -13,6 +13,8 @@ import java.sql.SQLException;
 /**
  * Service to manage dynamic DataSource operations.
  * Handles creation, validation, and safe removal of DataSources.
+ * <p>
+ * Management APIs never affect the write data source.
  */
 public class DataSourceManager {
 
@@ -26,7 +28,7 @@ public class DataSourceManager {
         this.poolTemplate = poolTemplate != null ? poolTemplate : new PoolProperties();
     }
 
-    public void addDataSource(String key, String url, String username, String password, int weight) {
+    public void addReadDataSource(String key, String url, String username, String password, int weight) {
         if (key == null || key.trim().isEmpty())
             throw new IllegalArgumentException("key must not be empty");
         if (url == null || url.trim().isEmpty())
@@ -39,7 +41,7 @@ public class DataSourceManager {
 
         log.info("Request to add DataSource key=[{}]", key); // Keep INFO for request receipt, WARN for actual change?
                                                              // User asked for WARN.
-        log.warn("Adding new DataSource: key=[{}], url=[{}]", key, url);
+        log.warn("Adding new Read DataSource: key=[{}], url=[{}]", key, url);
 
         HikariDataSource ds = new HikariDataSource();
         ds.setJdbcUrl(url);
@@ -63,7 +65,7 @@ public class DataSourceManager {
         }
 
         try {
-            router.addDataSource(key, ds, weight);
+            router.addReadDataSource(key, ds, weight);
         } catch (Exception e) {
             log.error("Failed to register DataSource with Router key={}", key, e);
             ds.close(); // Safety close
@@ -71,11 +73,11 @@ public class DataSourceManager {
         }
     }
 
-    public void removeDataSource(String key) {
+    public void removeReadDataSource(String key) {
         if (key == null || key.trim().isEmpty())
             throw new IllegalArgumentException("key must not be empty");
 
-        log.warn("Removing DataSource: key=[{}]", key);
+        log.warn("Removing Read DataSource: key=[{}]", key);
 
         DataSource ds = router.getDataSource(key);
         if (ds == null) {
@@ -83,7 +85,13 @@ public class DataSourceManager {
             return;
         }
 
-        router.removeDataSource(key);
+        // Check if trying to remove WRITE (obsolete check if only readDataSources
+        // managed, but safe)
+        if ("WRITE".equals(key)) {
+            throw new IllegalArgumentException("Cannot remove WRITE DataSource");
+        }
+
+        router.removeReadDataSource(key);
 
         if (ds instanceof HikariDataSource) {
             log.info("Closing HikariDataSource for key={}", key);

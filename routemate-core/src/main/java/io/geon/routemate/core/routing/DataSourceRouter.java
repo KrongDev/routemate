@@ -5,6 +5,7 @@ import lombok.Setter;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 import javax.sql.DataSource;
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
@@ -26,16 +27,24 @@ import io.geon.routemate.core.balancer.RoundRobinLoadBalancer;
 public class DataSourceRouter extends AbstractRoutingDataSource {
 
     private static final Logger log = LoggerFactory.getLogger(DataSourceRouter.class);
+    // Writer는 무조건 Master 정책 적용
+    private final DataSource writeDataSource;
+    @Getter
+    private final Map<String, DataSource> readDataSources = new ConcurrentHashMap<>();
 
     // Safe to return COWAL
     @Getter
     private final List<String> readDataSourceKeys = new CopyOnWriteArrayList<>();
     private final Set<String> unhealthyKeys = ConcurrentHashMap.newKeySet();
     @Setter
-    private LoadBalancer loadBalancer = new RoundRobinLoadBalancer(); // Default
+    private LoadBalancer loadBalancer;
 
-    @Getter
-    private final Map<Object, DataSource> dataSourceMap = new ConcurrentHashMap<>();
+    public DataSourceRouter(DataSource writeDataSource, LoadBalancer loadBalancer) {
+        log.error("WRITE DS CLASS = {}", writeDataSource.getClass());
+        this.writeDataSource = writeDataSource;
+        this.loadBalancer = loadBalancer != null ? loadBalancer : new RoundRobinLoadBalancer();
+        refreshRouting();
+    }
 
     @Override
     protected Object determineCurrentLookupKey() {
@@ -50,37 +59,31 @@ public class DataSourceRouter extends AbstractRoutingDataSource {
             }
 
             if (healthyKeys.isEmpty()) {
-                log.warn("No healthy read replicas available. Falling back to MASTER.");
-                return null; // Fallback to default (Master)
+                log.warn("No healthy read replicas available. Falling back to WRITE DataSource.");
+                return "WRITE";
             }
 
             // Delegate availability logic to LoadBalancer
             return loadBalancer.select(healthyKeys);
         }
-        return key;
+        return "WRITE";
     }
 
-    // Configuration helper to easily add data sources
-    public void setTargetDataSourcesMap(Map<Object, Object> targetDataSources) {
-        super.setTargetDataSources(targetDataSources);
-        // Store explicit references for HealthChecker
-        this.dataSourceMap.clear();
-        targetDataSources.forEach((k, v) -> {
-            if (v instanceof DataSource) {
-                this.dataSourceMap.put(k, (DataSource) v);
-            }
-        });
+    public void setReadDataSources(Map<String, DataSource> readDataSources) {
+        this.readDataSources.clear();
+        this.readDataSourceKeys.clear();
+        if (readDataSources != null) {
+            this.readDataSources.putAll(readDataSources);
+            this.readDataSourceKeys.addAll(readDataSources.keySet());
+        }
+        refreshRouting();
     }
 
     public DataSource getDataSource(String key) {
-        return dataSourceMap.get(key);
-    }
-
-    public void setReadDataSourceKeys(List<String> keys) {
-        this.readDataSourceKeys.clear();
-        if (keys != null) {
-            this.readDataSourceKeys.addAll(keys);
+        if ("WRITE".equals(key)) {
+            return writeDataSource;
         }
+        return readDataSources.get(key);
     }
 
     // Health Check Management
@@ -97,43 +100,103 @@ public class DataSourceRouter extends AbstractRoutingDataSource {
     }
 
     // Dynamic Management
-    private final Map<String, Integer> weights = new ConcurrentHashMap<>();
+    // Weights are delegated to LoadBalancer
 
-    public synchronized void addDataSource(String key, DataSource dataSource, int weight) {
-        log.info("Adding DataSource [{}] with weight [{}]", key, weight);
-        this.dataSourceMap.put(key, dataSource);
-        this.readDataSourceKeys.add(key); // Assumes all added dynamic DBs are read replicas
-        this.weights.put(key, weight);
+    public synchronized void addReadDataSource(String key, DataSource dataSource, int weight) {
+        log.info("Adding Read DataSource [{}] with weight [{}]", key, weight);
+        this.readDataSources.put(key, dataSource);
+        this.readDataSourceKeys.add(key);
         refreshRouting();
+
+        // Notify LoadBalancer about new weight
+        if (loadBalancer != null) {
+            loadBalancer.updateWeights(Map.of(key, weight)); // This merges usually
+        }
     }
 
-    public synchronized void removeDataSource(String key) {
-        // Protect MASTER
-        if ("MASTER".equalsIgnoreCase(key)) {
-            throw new IllegalArgumentException("MASTER DataSource cannot be removed dynamically");
+    public synchronized void removeReadDataSource(String key) {
+        log.info("Removing Read DataSource [{}]", key);
+        DataSource ds = this.readDataSources.remove(key);
+        this.readDataSourceKeys.remove(key);
+        this.unhealthyKeys.remove(key);
+
+        // Close if managed
+        if (ds instanceof com.zaxxer.hikari.HikariDataSource) {
+            ((com.zaxxer.hikari.HikariDataSource) ds).close();
+        } else if (ds instanceof java.io.Closeable) {
+            try {
+                ((java.io.Closeable) ds).close();
+            } catch (java.io.IOException e) {
+                log.warn("Error closing DataSource [{}]", key, e);
+            }
         }
 
-        log.info("Removing DataSource [{}]", key);
-        this.dataSourceMap.remove(key);
-        this.readDataSourceKeys.remove(key);
-        this.weights.remove(key);
-        this.unhealthyKeys.remove(key); // Cleanup
         refreshRouting();
     }
 
     private void refreshRouting() {
-        // Create new targetDataSources map
-        Map<Object, Object> newTargetDataSources = new HashMap<>(this.dataSourceMap);
-        super.setTargetDataSources(newTargetDataSources);
-        super.afterPropertiesSet(); // Trigger Spring internal refresh
+        Map<Object, Object> targetDataSources = new HashMap<>();
+        if (writeDataSource != null) {
+            targetDataSources.put("WRITE", writeDataSource);
+        }
+        targetDataSources.putAll(readDataSources);
 
-        // Refresh LoadBalancer weights
+        super.setTargetDataSources(targetDataSources);
+        if (writeDataSource != null) {
+            super.setDefaultTargetDataSource(writeDataSource);
+        }
+        super.afterPropertiesSet();
+    }
+
+    public void updateWeights(Map<String, Integer> newWeights) {
         if (loadBalancer != null) {
-            loadBalancer.updateWeights(new HashMap<>(this.weights));
+            loadBalancer.updateWeights(newWeights);
         }
     }
 
-    public void setWeights(Map<String, Integer> weights) {
-        this.weights.putAll(weights);
+    @Override
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        if (iface.isInstance(this)) {
+            return true;
+        }
+
+        DataSource target = unwrapTarget(writeDataSource);
+
+        // 🔑 자기 자신으로 돌아오면 차단
+        if (target == this) {
+            return false;
+        }
+
+        return target.isWrapperFor(iface);
     }
+
+    @Override
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (iface.isInstance(this)) {
+            return iface.cast(this);
+        }
+
+        DataSource target = unwrapTarget(writeDataSource);
+
+        if (target == this) {
+            throw new SQLException("Cannot unwrap to " + iface);
+        }
+
+        return target.unwrap(iface);
+    }
+
+    private DataSource unwrapTarget(DataSource ds) {
+        if (ds instanceof org.springframework.aop.framework.Advised advised) {
+            try {
+                Object target = advised.getTargetSource().getTarget();
+                if (target instanceof DataSource) {
+                    return (DataSource) target;
+                }
+            } catch (Exception e) {
+                // ignore and fallback
+            }
+        }
+        return ds;
+    }
+
 }

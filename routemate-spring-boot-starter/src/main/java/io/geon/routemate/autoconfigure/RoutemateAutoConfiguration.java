@@ -1,29 +1,42 @@
 package io.geon.routemate.autoconfigure;
 
+import com.zaxxer.hikari.HikariDataSource;
 import io.geon.routemate.core.aop.RoutingAspect;
+import io.geon.routemate.core.balancer.LoadBalancer;
+import io.geon.routemate.core.balancer.RandomLoadBalancer;
+import io.geon.routemate.core.balancer.RoundRobinLoadBalancer;
+import io.geon.routemate.core.balancer.WeightedRoundRobinLoadBalancer;
+import io.geon.routemate.core.health.DataSourceHealthChecker;
 import io.geon.routemate.core.routing.DataSourceRouter;
+import io.geon.routemate.management.DataSourceManagementController;
+import io.geon.routemate.management.DataSourceManager;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import com.zaxxer.hikari.HikariDataSource;
 
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+
+import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-
-import io.geon.routemate.core.balancer.LoadBalancer;
-import io.geon.routemate.core.balancer.RoundRobinLoadBalancer;
-import io.geon.routemate.core.balancer.RandomLoadBalancer;
-import io.geon.routemate.core.balancer.WeightedRoundRobinLoadBalancer;
-import io.geon.routemate.core.health.DataSourceHealthChecker;
 
 @AutoConfiguration
-@EnableConfigurationProperties(DataSourceConfigurationProperties.class)
+@EnableConfigurationProperties({ DataSourceConfigurationProperties.class, DataSourceProperties.class })
 @ConditionalOnProperty(prefix = "routemate", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class RoutemateAutoConfiguration {
+
+    @Bean(name = "writeDataSource")
+    @ConditionalOnMissingBean(name = "writeDataSource")
+    public DataSource writeDataSource(DataSourceProperties properties) {
+        return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -36,10 +49,7 @@ public class RoutemateAutoConfiguration {
 
         if ("weighted-round-robin".equalsIgnoreCase(strategy)) {
             Map<String, Integer> weights = new HashMap<>();
-            properties.getDatasources().forEach((key, props) -> {
-                // Only consider read datasources? Or all?
-                // Router filters by readDataSourceKeys anyway.
-                // We just pass all weights.
+            properties.getReads().forEach((key, props) -> {
                 weights.put(key, props.getWeight());
             });
             return new WeightedRoundRobinLoadBalancer(weights);
@@ -55,14 +65,19 @@ public class RoutemateAutoConfiguration {
 
     @Bean
     @Primary
-    public DataSourceRouter routemateDataSource(DataSourceConfigurationProperties properties,
+    @ConditionalOnMissingBean(DataSourceRouter.class)
+    public DataSourceRouter routemateDataSource(
+            @Qualifier("writeDataSource") @org.springframework.context.annotation.Lazy DataSource writeDataSource,
+            DataSourceConfigurationProperties properties,
             LoadBalancer loadBalancer) {
-        DataSourceRouter router = new DataSourceRouter();
-        router.setLoadBalancer(loadBalancer);
-        Map<Object, Object> targetDataSources = new HashMap<>();
 
-        // Create DataSources from properties
-        properties.getDatasources().forEach((key, props) -> {
+        // 1. Wrap the existing Write DataSource
+        DataSourceRouter router = new DataSourceRouter(writeDataSource, loadBalancer);
+
+        Map<String, DataSource> readDataSources = new HashMap<>();
+
+        // Create Read DataSources from properties
+        properties.getReads().forEach((key, props) -> {
             HikariDataSource ds = new HikariDataSource();
             ds.setJdbcUrl(props.getUrl());
             ds.setUsername(props.getUsername());
@@ -77,30 +92,15 @@ public class RoutemateAutoConfiguration {
                 ds.setIdleTimeout(props.getPool().getIdleTimeout());
                 ds.setMaxLifetime(props.getPool().getMaxLifetime());
             }
-            targetDataSources.put(key, ds);
+            readDataSources.put(key, ds);
         });
 
-        router.setTargetDataSourcesMap(targetDataSources);
+        router.setReadDataSources(readDataSources);
 
         // Pass initial weights to router for future management
         Map<String, Integer> initialWeights = new HashMap<>();
-        properties.getDatasources().forEach((k, v) -> initialWeights.put(k, v.getWeight()));
-        router.setWeights(initialWeights);
-
-        if (properties.getRouting().getReadDatasources() != null) {
-            router.setReadDataSourceKeys(properties.getRouting().getReadDatasources());
-        }
-
-        // Set default target
-        if (properties.getDefaultDatasource() != null
-                && targetDataSources.containsKey(properties.getDefaultDatasource())) {
-            router.setDefaultTargetDataSource(
-                    Objects.requireNonNull(targetDataSources.get(properties.getDefaultDatasource())));
-        } else if (!targetDataSources.isEmpty()) {
-            // Fallback to first available if no default specified or default key not found
-            Object firstKey = targetDataSources.keySet().iterator().next();
-            router.setDefaultTargetDataSource(Objects.requireNonNull(targetDataSources.get(firstKey)));
-        }
+        properties.getReads().forEach((k, v) -> initialWeights.put(k, v.getWeight()));
+        router.updateWeights(initialWeights);
 
         return router;
     }
@@ -116,47 +116,40 @@ public class RoutemateAutoConfiguration {
                 properties.getHealthCheck().getInterval(),
                 properties.getHealthCheck().getTimeout(),
                 properties.getHealthCheck().getValidationQuery());
-        checker.start();
+        // checker.start() removed; handled by SmartLifecycle
         return checker;
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "routemate.management", name = "enabled", havingValue = "true", matchIfMissing = false)
-    public io.geon.routemate.management.DataSourceManager dataSourceManager(
+    @ConditionalOnProperty(prefix = "routemate.management", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public DataSourceManager dataSourceManager(
             DataSourceRouter router,
             DataSourceConfigurationProperties properties) {
 
         // Resolve Pool Template
         DataSourceConfigurationProperties.PoolProperties template = properties.getPoolTemplate();
 
-        if (template == null) {
-            // Fallback: Try to use the default datasource's pool config as template
-            if (properties.getDefaultDatasource() != null) {
-                DataSourceConfigurationProperties.DataSourceProperties defaultProps = properties.getDatasources()
-                        .get(properties.getDefaultDatasource());
-                if (defaultProps != null) {
-                    template = defaultProps.getPool();
-                }
-            }
-        }
-
-        if (template == null && !properties.getDatasources().isEmpty()) {
-            // Fallback: First available
-            DataSourceConfigurationProperties.DataSourceProperties first = properties.getDatasources().values()
+        if (template == null && !properties.getReads().isEmpty()) {
+            // Fallback: First available read datasource
+            DataSourceConfigurationProperties.DataSourceProperties first = properties.getReads().values()
                     .iterator().next();
             if (first != null) {
                 template = first.getPool();
             }
         }
 
-        return new io.geon.routemate.management.DataSourceManager(router, template);
+        if (template == null) {
+            template = new DataSourceConfigurationProperties.PoolProperties();
+        }
+
+        return new DataSourceManager(router, template);
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "routemate.management", name = "enabled", havingValue = "true", matchIfMissing = false)
-    @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
-    public io.geon.routemate.management.DataSourceManagementController dataSourceManagementController(
-            io.geon.routemate.management.DataSourceManager manager) {
-        return new io.geon.routemate.management.DataSourceManagementController(manager);
+    @ConditionalOnProperty(prefix = "routemate.management", name = "enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnWebApplication
+    public DataSourceManagementController dataSourceManagementController(
+            DataSourceManager manager) {
+        return new DataSourceManagementController(manager);
     }
 }

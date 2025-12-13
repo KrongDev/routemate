@@ -17,7 +17,7 @@ public class DataSourceManagementController {
 
     @PostMapping
     public ResponseEntity<String> addDataSource(@RequestBody AddDataSourceRequest request) {
-        manager.addDataSource(
+        manager.addReadDataSource(
                 request.getKey(),
                 request.getUrl(),
                 request.getUsername(),
@@ -28,7 +28,7 @@ public class DataSourceManagementController {
 
     @DeleteMapping("/{key}")
     public ResponseEntity<String> removeDataSource(@PathVariable String key) {
-        manager.removeDataSource(key);
+        manager.removeReadDataSource(key);
         return ResponseEntity.ok("DataSource removed successfully");
     }
 
