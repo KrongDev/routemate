@@ -1,31 +1,47 @@
 version: '3.8'
+
 services:
   mysql-master:
-    image: mysql:8.0
+    build: ./master
     container_name: routemate-mysql-master
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: routemate_db
     ports:
       - "3307:3306"
-    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - mysql-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
 
   mysql-slave-1:
-    image: mysql:8.0
+    build: ./slave1
     container_name: routemate-mysql-slave-1
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: routemate_db
     ports:
       - "3308:3306"
-    command: --default-authentication-plugin=mysql_native_password
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    networks:
+      - mysql-network
 
   mysql-slave-2:
-    image: mysql:8.0
+    build: ./slave2
     container_name: routemate-mysql-slave-2
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: routemate_db
     ports:
       - "3309:3306"
-    command: --default-authentication-plugin=mysql_native_password
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    networks:
+      - mysql-network
+
+networks:
+  mysql-network:
+    driver: bridge

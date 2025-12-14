@@ -194,6 +194,7 @@ public class DataSourceRouter extends AbstractRoutingDataSource {
                 }
             } catch (Exception e) {
                 // ignore and fallback
+                log.warn("Error unwrapping DataSource [{}]", ds, e);
             }
         }
         return ds;

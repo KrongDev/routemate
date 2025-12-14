@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,8 +58,8 @@ public class DataSourceConfigurationProperties {
     @Getter
     public static class HealthCheckProperties {
         private boolean enabled = true;
-        private java.time.Duration interval = java.time.Duration.ofSeconds(5);
-        private java.time.Duration timeout = java.time.Duration.ofSeconds(2);
+        private Duration interval = Duration.ofSeconds(5);
+        private Duration timeout = Duration.ofSeconds(2);
         private String validationQuery;
 
     }

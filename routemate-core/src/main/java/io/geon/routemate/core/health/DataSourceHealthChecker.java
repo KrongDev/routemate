@@ -11,6 +11,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement; // Import needed
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -22,15 +23,15 @@ public class DataSourceHealthChecker implements SmartLifecycle {
 
     private final DataSourceRouter router;
     private final ScheduledExecutorService executor;
-    private final java.time.Duration interval;
-    private final java.time.Duration timeout;
+    private final Duration interval;
+    private final Duration timeout;
     private final String validationQuery;
 
     private volatile boolean running = false;
 
     public DataSourceHealthChecker(DataSourceRouter router,
-            java.time.Duration interval,
-            java.time.Duration timeout,
+            Duration interval,
+            Duration timeout,
             String validationQuery) {
         this.router = router;
         this.interval = interval;
