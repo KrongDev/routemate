@@ -2,6 +2,7 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
+    id "com.vanniktech.maven.publish" version "0.35.0"
 }
 
 dependencies {
@@ -15,51 +16,38 @@ dependencies {
     implementation "jakarta.annotation:jakarta.annotation-api:${jakartaAnnotationVersion}"
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-            artifactId = 'routemate-core'
+mavenPublishing {
+    coordinates("io.github.krongdev", "routemate-core", "1.0.0")
 
-            pom {
-                name = 'Routemate Core'
-                description = 'Lightweight Read/Write DB Router for Spring Boot'
-                url = 'https://github.com/KrongDev/routemate'
-
-                licenses {
-                    license {
-                        name = 'Apache License, Version 2.0'
-                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'krongdev'
-                        name = 'Geon Lee'
-                        email = 'leegeondev@gmail.com'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:https://github.com/KrongDev/routemate.git'
-                    developerConnection = 'scm:git:ssh://git@github.com:KrongDev/routemate.git'
-                    url = 'https://github.com/KrongDev/routemate'
-                }
+    pom {
+        name = "Routemate Core"
+        description = "Lightweight Read/Write DB Router for Spring Boot"
+        inceptionYear = "2025"
+        url = "https://github.com/Krongdev/routemate/"
+        licenses {
+            license {
+                name = "The Apache License, Version 2.0"
+                url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                distribution = "http://www.apache.org/licenses/LICENSE-2.0.txt"
             }
+        }
+        developers {
+            developer {
+                id = "krongdev"
+                name = "Geon Lee"
+                url = "https://github.com/Krongdev/"
+            }
+        }
+        scm {
+            url = "https://github.com/Krongdev/routemate/"
+            connection = "scm:git:git://github.com/Krongdev/routemate.git"
+            developerConnection = "scm:git:ssh://git@github.com/Krongdev/routemate.git"
         }
     }
 
-    repositories {
-        maven {
-            name = 'ossrh-staging-api'
-            url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-            credentials {
-                username = findProperty("centralUsername")?.toString()
-                password = findProperty("centralPassword")?.toString()
-            }
-        }
-    }
+    publishToMavenCentral()
+
+    signAllPublications()
 }
 
 signing {
