@@ -5,12 +5,24 @@ plugins {
 }
 
 allprojects {
-    group = 'io.geon'
-    version = '0.0.1-SNAPSHOT'
+    group = 'io.github.krongdev'
+    version = '0.0.1'
 
     repositories {
+        mavenLocal()
         mavenCentral()
     }
+}
+
+ext {
+    springBootVersion = '3.4.0'
+    springFrameworkVersion = '6.2.0'
+    hikariCpVersion = '5.1.0'
+    slf4jVersion = '2.0.13'
+    aspectjVersion = '1.9.22'
+    jakartaAnnotationVersion = '2.1.1'
+    mysqlVersion = '8.3.0'
+    mockitoVersion = '5.3.1'
 }
 
 subprojects {
@@ -21,6 +33,8 @@ subprojects {
         toolchain {
             languageVersion = JavaLanguageVersion.of(17)
         }
+        withSourcesJar()
+        withJavadocJar()
     }
 
     test {
@@ -36,10 +50,11 @@ subprojects {
     dependencies {
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
+
         testImplementation 'org.junit.jupiter:junit-jupiter'
         testImplementation 'org.assertj:assertj-core'
+        testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+        testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-        testCompileOnly 'org.projectlombok:lombok'
-        testAnnotationProcessor 'org.projectlombok:lombok'
     }
 }

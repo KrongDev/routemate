@@ -49,7 +49,9 @@ Then Routemate is for you.
 Add the dependency to your `build.gradle` (assuming published or local project):
 
 ```groovy
-implementation 'io.geon:routemate-spring-boot-starter:0.0.1-SNAPSHOT'
+dependencies {
+    implementation 'io.github.krongdev:routemate-spring-boot-starter:0.0.1'
+}
 ```
 
 ### Configuration

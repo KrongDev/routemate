@@ -1,12 +1,69 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+}
+
 dependencies {
-    api project(':routemate-core')
-    implementation 'org.springframework.boot:spring-boot-starter-aop'
-    implementation 'org.springframework.boot:spring-boot-autoconfigure'
-    
-    // Compile-time dependencies provided by the consumer
-    compileOnly 'org.springframework.boot:spring-boot-starter-web'
-    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
-    
-    // Optional annotation processor for generating metadata
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    api "io.github.krongdev:routemate-core:0.0.1"
+
+    implementation "org.springframework.boot:spring-boot-starter-aop:${springBootVersion}"
+    implementation "org.springframework.boot:spring-boot-autoconfigure:${springBootVersion}"
+
+    compileOnly "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+    compileOnly "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+
+    annotationProcessor "org.springframework.boot:spring-boot-configuration-processor:${springBootVersion}"
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'routemate-spring-boot-starter'
+
+            pom {
+                name = 'Routemate Spring Boot Starter'
+                description = 'Lightweight Read/Write DB Router for Spring Boot'
+                url = 'https://github.com/KrongDev/routemate'
+
+                licenses {
+                    license {
+                        name = 'Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'krongdev'
+                        name = 'Geon Lee'
+                        email = 'leegeondev@gmail.com'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/KrongDev/routemate.git'
+                    developerConnection = 'scm:git:ssh://git@github.com:KrongDev/routemate.git'
+                    url = 'https://github.com/KrongDev/routemate'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'ossrh-staging-api'
+            url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+            credentials {
+                username = findProperty("centralUsername")?.toString()
+                password = findProperty("centralPassword")?.toString()
+            }
+        }
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications
 }
