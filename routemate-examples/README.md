@@ -68,5 +68,5 @@ You can test the API using curl or Postman.
 To stop the databases:
 
 ```bash
-docker-compose down
+docker-compose down -v
 ```

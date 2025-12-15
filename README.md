@@ -73,13 +73,15 @@ routemate:
   reads:
     slave-1:
       url: jdbc:mysql://localhost:3307/mydb
-      username: read_user
-      password: read_password
+      username: read_user1
+      password: read_password1
+      driver-class-name: com.mysql.cj.jdbc.Driver
       weight: 1
     slave-2:
       url: jdbc:mysql://localhost:3308/mydb
-      username: read_user
-      password: read_password
+      username: read_user2
+      password: read_password2
+      driver-class-name: com.mysql.cj.jdbc.Driver
       weight: 2
       
   # Routing Strategy
