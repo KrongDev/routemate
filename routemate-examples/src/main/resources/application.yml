@@ -1,7 +1,6 @@
 spring:
   application:
     name: routemate-example
-
   datasource:
     url: jdbc:mysql://localhost:3307/routemate_db
       ?useSSL=false
@@ -10,7 +9,6 @@ spring:
     username: routemate
     password: routemate
     driver-class-name: com.mysql.cj.jdbc.Driver
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,6 +17,7 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
+
 routemate:
   enabled: true
   reads:
@@ -42,6 +41,7 @@ routemate:
       weight: 1
   routing:
     load-balance-strategy: weighted-round-robin
+
 logging:
   level:
     root: info

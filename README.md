@@ -10,30 +10,35 @@ It focuses on the 80% most common read/write separation use cases, without intro
 new infrastructure, SQL rewriting, or operational complexity.
 
 If you've ever thought:
-- "ShardingSphere is too heavy for this"
-- "I just want read replicas, not a distributed database"
-- "I want something that behaves like Spring, not replaces it"
+
+* "ShardingSphere is too heavy for this"
+* "I just want read replicas, not a distributed database"
+* "I want something that behaves like Spring, not replaces it"
 
 Then Routemate is for you.
 
 ## Features
 
 ### Core Routing
-- **Zero-Code Read/Write Splitting**
-- **Multi-Read Replica Support**
+
+* **Zero-Code Read/Write Splitting**
+* **Multi-Read Replica Support**
 
 ### Load Balancing
-- Round-Robin (Default)
-- Random
-- Weighted Round-Robin
+
+* Round-Robin (Default)
+* Random
+* Weighted Round-Robin
 
 ### Reliability
-- Background Health Checks
-- Automatic Master Fallback
+
+* Background Health Checks
+* Automatic Master Fallback
 
 ### Operational Flexibility
-- Programmatic DataSource Management
-- Per-DataSource HikariCP Tuning
+
+* Programmatic DataSource Management
+* Per-DataSource HikariCP Tuning
 
 > With Routemate, you don't change your code.
 > You just annotate your transactions correctly.
@@ -41,11 +46,13 @@ Then Routemate is for you.
 ## Quick Start
 
 ### Prerequisites
-- Java 17+
-- Spring Boot 3.x
-- Docker & Docker Compose (for running the examples)
+
+* Java 17+
+* Spring Boot 3.x
+* Docker & Docker Compose (for running the examples)
 
 ### Installation
+
 Add the dependency to your `build.gradle` (assuming published or local project):
 
 ```groovy
@@ -55,6 +62,7 @@ dependencies {
 ```
 
 ### Configuration
+
 Configure your data sources in `application.yml`:
 
 ```yaml
@@ -89,7 +97,28 @@ routemate:
     load-balance-strategy: weighted-round-robin
 ```
 
+### Options (Per-Replica Connection Pool Tuning)
+
+Routemate allows fine-grained HikariCP configuration **per read replica**.
+This is useful when replicas have different performance characteristics or connection limits.
+
+```yaml
+routemate:
+  reads:
+    slave-1:
+      # -- datasource connection pool (HikariCP) --
+      pool:
+        maximum-pool-size: 10
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+```
+
+> If `pool` is not specified, Routemate falls back to Spring Boot's default HikariCP settings.
+
 ### Usage
+
 Simply use Spring's standard `@Transactional` annotation. Routemate handles the rest.
 
 ```java
